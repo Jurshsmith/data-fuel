@@ -6,12 +6,10 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::ServerAPI;
-
 use super::config::ServerAPIConfig;
 use super::rate_limiting::RateLimiter;
-
 use super::worker::{Worker, WorkerMessage};
+use crate::ServerAPI;
 
 pub struct WorkersPool<'a, S: ServerAPI + Send + Sync + 'static> {
     master: mpsc::Sender<WorkerMessage>,

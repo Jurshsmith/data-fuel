@@ -16,16 +16,23 @@ use super::ServerAPI;
 
 type Master = mpsc::Sender<WorkerMessage>;
 
+type WorkerId = u32;
+
 #[derive(Debug)]
 pub enum WorkerMessage {
-    AwaitingWork(u32, oneshot::Sender<Range<u32>>),
-    CompletedWork(u32, Range<u32>, WorkerResult),
-    FailedWork(u32, oneshot::Sender<Range<u32>>, Range<u32>, WorkerResult),
+    AwaitingWork(WorkerId, oneshot::Sender<Range<u32>>),
+    CompletedWork(WorkerId, Range<u32>, WorkerResult),
+    FailedWork(
+        WorkerId,
+        oneshot::Sender<Range<u32>>,
+        Range<u32>,
+        WorkerResult,
+    ),
     AllDone,
 }
 
 pub struct Worker<S: ServerAPI + Send + Sync + 'static> {
-    id: u32,
+    id: WorkerId,
     server_api: Arc<S>,
     master: Master,
     block_headers_rate_limiter: RateLimiter,
@@ -35,7 +42,7 @@ pub struct Worker<S: ServerAPI + Send + Sync + 'static> {
 
 impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
     pub fn new(
-        id: u32,
+        id: WorkerId,
         server_api: Arc<S>,
         master: Master,
         block_headers_rate_limiter: RateLimiter,
