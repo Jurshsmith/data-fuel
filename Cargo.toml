@@ -3,7 +3,8 @@
 resolver = "2"
 members = [
   "linked-lists",
-  "data-fuel-benches"
+  "data-fuel-benches",
+  "sync-engine"
 ]
 
 

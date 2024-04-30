@@ -2,6 +2,7 @@
 [package]
 name = "data-fuel-benches"
 edition = "2021"
+version = "0.0.1"
 
 [dependencies]
 linked-lists = { path = "../linked-lists" }
