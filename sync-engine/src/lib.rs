@@ -7,6 +7,7 @@ mod worker;
 mod workers_pool;
 
 pub use sync_engine::*;
+use tracing::info;
 
 use std::{ops::Range, time::Instant};
 
@@ -69,7 +70,7 @@ fn simulate_sync_work() {
         }
     }
     let elapsed = now.elapsed();
-    println!("Transaction Exec Elapsed: {:.2?}", elapsed);
+    info!("Transaction execution finished in: {:.2?}", elapsed);
 }
 
 /// The block that contains transactions and the header of the blockchain state.
