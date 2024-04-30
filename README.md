@@ -14,15 +14,17 @@ To run playgorund, run:
   cargo run -p sync-engine
 ```
 
-Equally, to run tests:
+N/B: Runs a long-running and computationally intensive process. To remove synchronous work simulation, comment out this line: [SyncEngine:L58](https://github.com/Jurshsmith/data-fuel/blob/d3f8fb736e63437cba8f2b5fc1b727b3ec278aff/sync-engine/src/lib.rs#L58)
+
+For tests, run:
 
 ```sh
-  cargo tests -p sync-engine
+  cargo test -p sync-engine
 ```
 
 ## Linked Lists
 
-An implementation of the `SinglyLinkedList` and `DoublyLinkedList` using `unsafe` Rust. `data-fuel-benches` contains benchmarks to compare both structures. Please read its context's `README.md` to view some performance analysis on their comparisons.
+Implementations of the `SinglyLinkedList` and `DoublyLinkedList` using `unsafe` Rust. `data-fuel-benches` contains benchmarks to compare both structures. Please read its context's `README.md` to view some analysis on their performances.
 
 ### Running
 
@@ -35,5 +37,5 @@ To run benchmarks, run:
 Equally, to run tests, run:
 
 ```sh
-  cargo run -p linked-lists
+  cargo test -p linked-lists
 ```
