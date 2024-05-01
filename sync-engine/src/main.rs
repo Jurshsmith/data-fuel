@@ -3,6 +3,8 @@ use std::{ops::Range, time::Instant};
 use sync_engine::config::Config;
 use sync_engine::*;
 
+use tracing::info;
+
 #[tokio::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::new();
@@ -14,7 +16,7 @@ async fn main() {
     sync_blocks(&config).await;
 
     let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    info!("Elapsed: {:.2?}", elapsed);
 }
 
 struct PlayGroundServerAPI;
