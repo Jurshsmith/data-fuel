@@ -1,4 +1,4 @@
-# Benchmark Performance Analysis: Singly vs. Doubly Linked List Traversal
+# Benchmark Analysis: Singly vs. Doubly LinkedList Traversal
 
 **Number of Elements:** 1,000,000 `u32` elements
 
