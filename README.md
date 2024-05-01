@@ -4,7 +4,7 @@ Houses a blockchain syncing engine & implementations of the LinkedList data-stru
 
 ## Sync Engine
 
-A Tokio-powered syncing engine designed to parallel-fetch blockchain data from rate-limited remote services with the most performance possible. To learn more about its high-level architecture, please read `README.md` in its context.
+A Tokio-powered syncing engine designed to parallel-fetch blockchain data from rate-limited distributed services with the most performance possible. To learn more about its high-level architecture, please read `README.md` in its context.
 
 ### Running
 
