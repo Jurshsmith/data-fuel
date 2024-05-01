@@ -1,4 +1,4 @@
-mod block_height_chunks;
+mod block_height_ranges;
 pub mod config;
 pub mod rate_limiting;
 pub mod results;
