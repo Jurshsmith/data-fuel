@@ -7,6 +7,7 @@ use crate::results::WorkerResult;
 use crate::worker::WorkerMessage;
 use crate::workers_pool::WorkersPool;
 
+use tokio::sync::oneshot;
 use tracing::info;
 
 use super::ServerAPI;
@@ -32,11 +33,7 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
     while let Some(worker_message) = workers_pool.next_worker_message().await {
         match worker_message {
             WorkerMessage::AwaitingWork(_, worker) => {
-                if let Some(new_work) = unsynced_block_heights.next() {
-                    worker
-                        .send(new_work)
-                        .expect("Workers must be available till Pool is shut down");
-                }
+                maybe_send_new_work(worker, unsynced_block_heights)
             }
             WorkerMessage::CompletedWork(_, completed_batch, worker_result) => {
                 results_from_workers.push(worker_result);
@@ -49,11 +46,7 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
             }
             WorkerMessage::FailedWork(_, worker, _, worker_result) => {
                 results_from_workers.push(worker_result);
-                if let Some(new_work) = unsynced_block_heights.next() {
-                    worker
-                        .send(new_work)
-                        .expect("Workers must be available till Pool is shut down");
-                }
+                maybe_send_new_work(worker, unsynced_block_heights);
             }
             WorkerMessage::AllDone => {
                 break;
@@ -62,6 +55,17 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
     }
 
     results_from_workers
+}
+
+fn maybe_send_new_work(
+    worker: oneshot::Sender<Range<u32>>,
+    unsynced_block_heights: &mut BlockHeightRangeChunks,
+) {
+    if let Some(new_work) = unsynced_block_heights.next() {
+        worker
+            .send(new_work)
+            .expect("Workers must be available till Pool is shut down");
+    }
 }
 
 #[cfg(test)]
