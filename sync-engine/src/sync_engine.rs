@@ -1,4 +1,4 @@
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::ops::Range;
 
 use crate::block_height_ranges::BlockHeightRanges;
@@ -19,7 +19,7 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
         server_api_config,
     }: &Config<S>,
 ) -> Vec<WorkerResult> {
-    let pool_size = min(100, (end - start) / chunk_size);
+    let pool_size = min(100, max(1, (end - start) / chunk_size));
     let unsynced_block_heights = &mut BlockHeightRanges::new((*start)..(*end), *chunk_size);
     let mut synced_block_height_range = *start..*start;
 

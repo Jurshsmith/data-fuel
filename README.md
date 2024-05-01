@@ -4,7 +4,7 @@ Houses a blockchain syncing engine & implementations of the LinkedList data-stru
 
 ## Sync Engine
 
-A Tokio-powered syncing engine designed to parallel-fetch blockchain data from rate-limited distributed services with the most performance possible. To learn more about its high-level architecture, please read `README.md` in its context.
+A Tokio-powered syncing engine designed to parallel-fetch blockchain data from rate-limited distributed services with the most performance possible. To view its high-level architecture analysis, please read `README.md` in its directory.
 
 ### Running
 
@@ -24,7 +24,7 @@ For tests, run:
 
 ## Linked Lists
 
-Implementations of the `SinglyLinkedList` and `DoublyLinkedList` using `unsafe` Rust. `data-fuel-benches` contains benchmarks to compare both structures. Please read its context's `README.md` to view some analysis on their performances.
+Implementations of the `SinglyLinkedList` and `DoublyLinkedList` using `unsafe` Rust. `data-fuel-benches` contains benchmarks to compare both structures. Please read its directory's `README.md` to view some analysis on their performances.
 
 ### Running
 

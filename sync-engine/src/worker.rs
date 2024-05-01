@@ -65,7 +65,6 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
             let server_api = self.server_api;
             let master = self.master;
             let cancel_token = self.cancel_token;
-
             let mut block_headers_rate_limiter = self.block_headers_rate_limiter;
             let mut block_transactions_rate_limiter = self.block_transactions_rate_limiter;
 
