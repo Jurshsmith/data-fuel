@@ -4,6 +4,7 @@ use super::results::{self, WorkerError, WorkerResult, WorkerSkippedError};
 use futures::Future;
 use rayon::prelude::*;
 use std::{collections::HashMap, ops::Range, sync::Arc};
+use tokio_util::task::TaskTracker;
 
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -28,7 +29,7 @@ pub enum WorkerMessage {
         Range<u32>,
         WorkerResult,
     ),
-    AllDone,
+    FinishedShuttingDown(WorkerId),
 }
 
 pub struct Worker<S: ServerAPI + Send + Sync + 'static> {
@@ -73,8 +74,8 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
 
                 let (worker_assistant, worker_assistant_message) =
                     oneshot::channel::<WorkerMessage>();
-
-                tokio::spawn({
+                let worker_assistant_tracker = TaskTracker::new();
+                worker_assistant_tracker.spawn({
                     let master = master.clone();
 
                     async move {
@@ -85,6 +86,7 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                         Self::send_master_message(&master, worker_message).await;
                     }
                 });
+                worker_assistant_tracker.close();
 
                 let Range { start, end } = block_height_range;
 
@@ -152,8 +154,11 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
 
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
-                        info!("Shutting down Worker:{worker_id}");
-
+                        info!("Worker:{worker_id} shutdown started...");
+                        worker_assistant_tracker.wait().await;
+                        let message = WorkerMessage::FinishedShuttingDown(worker_id);
+                        Self::send_master_message(&master, message).await;
+                        info!("Worker:{worker_id} finished shutting down");
                         break;
                     }
                     Ok(new_block_height_range) = worker_messages => {
