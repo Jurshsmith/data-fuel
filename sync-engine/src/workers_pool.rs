@@ -1,9 +1,8 @@
 use std::ops::Range;
-use std::time::Duration;
 
 use tokio::sync::mpsc;
-use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::info;
 
 use super::config::ServerAPIConfig;
@@ -11,10 +10,13 @@ use super::rate_limiting::RateLimiter;
 use super::worker::{Worker, WorkerMessage};
 use crate::ServerAPI;
 
+type WorkerId = u32;
 pub struct WorkersPool<'a, S: ServerAPI + Send + Sync + 'static> {
-    master: mpsc::Sender<WorkerMessage>,
+    size: u32,
     master_messages: mpsc::Receiver<WorkerMessage>,
     workers: Option<Box<dyn Iterator<Item = Worker<S>> + 'a>>,
+    workers_tracker: TaskTracker,
+    pub(crate) shutdown_workers: Vec<WorkerId>,
     cancel_tokens: Vec<CancellationToken>,
 }
 
@@ -53,10 +55,12 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
         });
 
         Self {
-            master,
+            size,
             master_messages,
             workers: Some(Box::new(workers)),
             cancel_tokens: Vec::new(),
+            workers_tracker: TaskTracker::new(),
+            shutdown_workers: Vec::new(),
         }
     }
 
@@ -73,7 +77,7 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
                 if let Some(block_height_range) = block_height_ranges.take(1).next() {
                     let cancel_token = worker.cancel_token.clone();
 
-                    tokio::spawn(worker.start(block_height_range));
+                    self.workers_tracker.spawn(worker.start(block_height_range));
 
                     Some(cancel_token)
                 } else {
@@ -81,23 +85,24 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
                 }
             })
             .collect();
+
+        self.workers_tracker.close();
     }
 
-    pub fn has_shutdown(&self) -> bool {
+    pub fn has_started_shutdown(&self) -> bool {
         self.workers.is_none()
     }
 
-    /// Shutdown workers' pool idempotently
-    pub async fn shutdown(&mut self) {
-        if !self.has_shutdown() {
-            info!("WorkerPool shutting down...");
+    pub fn all_workers_have_shutdown(&self) -> bool {
+        self.shutdown_workers.len() as u32 == self.size
+    }
+
+    /// Starts shutdown for workers' pool idempotently
+    pub fn start_shutdown(&mut self) {
+        if !self.has_started_shutdown() {
+            info!("WorkerPool shutdown started...");
             self.cancel_tokens.iter_mut().for_each(|c| c.cancel());
             self.workers = None;
-            sleep(Duration::from_millis(100)).await;
-            self.master
-                .send(WorkerMessage::AllDone)
-                .await
-                .expect("Master did the shutdown afterall!");
         }
     }
 }

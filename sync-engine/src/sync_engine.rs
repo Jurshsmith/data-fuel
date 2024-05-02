@@ -21,7 +21,6 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
 ) -> Vec<WorkerResult> {
     let pool_size = min(100, max(1, (end - start) / chunk_size));
     let unsynced_block_heights = &mut BlockHeightRanges::new((*start)..(*end), *chunk_size);
-    let mut synced_block_height_range = *start..*start;
 
     let mut workers_pool = WorkersPool::new(server_api_config, pool_size);
     let mut results_from_workers = Vec::new();
@@ -35,23 +34,26 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
             WorkerMessage::AwaitingWork(_, worker) => {
                 maybe_send_new_work(worker, unsynced_block_heights)
             }
-            WorkerMessage::CompletedWork(_, completed_batch, worker_result) => {
+            WorkerMessage::CompletedWork(_, _, worker_result) => {
                 results_from_workers.push(worker_result);
-                synced_block_height_range.end = completed_batch.end;
-
-                let sync_is_completed = synced_block_height_range.end == *end;
-                if sync_is_completed {
-                    workers_pool.shutdown().await;
-                }
             }
             WorkerMessage::FailedWork(_, worker, _, worker_result) => {
                 results_from_workers.push(worker_result);
                 maybe_send_new_work(worker, unsynced_block_heights);
             }
-            WorkerMessage::AllDone => {
-                break;
+            WorkerMessage::FinishedShuttingDown(worker_id) => {
+                workers_pool.shutdown_workers.push(worker_id);
+
+                if workers_pool.all_workers_have_shutdown() {
+                    break;
+                }
             }
         };
+
+        let sync_is_completed = !unsynced_block_heights.has_next();
+        if sync_is_completed {
+            workers_pool.start_shutdown();
+        }
     }
 
     results_from_workers
