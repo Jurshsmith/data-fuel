@@ -62,10 +62,10 @@ impl Transaction {
 
 fn simulate_sync_work() {
     let now = Instant::now();
-    let mut clock_seconds = 0;
+    let mut counter = 0;
     loop {
-        clock_seconds += 1;
-        if clock_seconds > 100 {
+        counter += 1;
+        if counter > 50 {
             break;
         }
     }
