@@ -84,14 +84,6 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
             .collect();
     }
 
-    pub fn has_started_shutdown(&self) -> bool {
-        self.workers.is_none()
-    }
-
-    pub fn all_workers_have_shutdown(&self) -> bool {
-        self.shutdown_workers.len() as u32 == self.size
-    }
-
     /// Starts shutdown for workers' pool idempotently
     pub fn start_shutdown(&mut self) {
         if !self.has_started_shutdown() {
@@ -99,5 +91,11 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
             self.cancel_tokens.iter_mut().for_each(|c| c.cancel());
             self.workers = None;
         }
+    }
+    pub fn has_started_shutdown(&self) -> bool {
+        self.workers.is_none()
+    }
+    pub fn all_workers_have_shutdown(&self) -> bool {
+        self.shutdown_workers.len() as u32 == self.size
     }
 }
