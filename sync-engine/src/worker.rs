@@ -95,39 +95,32 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                 let mut worker_error: Option<WorkerError> = None;
 
                 block_headers_rate_limiter.throttle().await;
-                let (mut verified_block_headers, unverified_block_headers) = server_api
-                    .block_headers(start..end)
-                    .await
-                    .map_err(|err| {
-                        // Typically, the ServerError would be enough and re-mapping here unnecessary
-                        worker_error = Some(WorkerError::BlockHeaders(start..end, err));
-                        Ok::<(), ()>(())
-                    })
-                    .map(verify_block_headers)
-                    .expect("No error");
-
+                let (mut verified_block_headers, unverified_block_headers) =
+                    match server_api.block_headers(start..end).await {
+                        Ok(block_headers) => verify_block_headers(block_headers),
+                        Err(err) => {
+                            worker_error = Some(WorkerError::BlockHeaders(start..end, err));
+                            (HashMap::new(), HashMap::new())
+                        }
+                    };
                 if let Some(worker_error) = worker_error {
                     let message =
                         WorkerMessage::FailedWork(worker_id, worker, start..end, Err(worker_error));
-                    Self::send_worker_assistant_message(worker_assistant, message);
-                    return;
+                    return Self::send_worker_assistant_message(worker_assistant, message);
                 }
 
                 block_transactions_rate_limiter.throttle().await;
-                let block_transactions = server_api
-                    .block_transactions(start..end)
-                    .await
-                    .map_err(|err| {
+                let block_transactions = match server_api.block_transactions(start..end).await {
+                    Ok(transactions) => transactions,
+                    Err(err) => {
                         worker_error = Some(WorkerError::BlockTransactions(start..end, err));
-                        Ok::<(), ()>(())
-                    })
-                    .expect("No error");
-
+                        Vec::new()
+                    }
+                };
                 if let Some(worker_error) = worker_error {
                     let message =
                         WorkerMessage::FailedWork(worker_id, worker, start..end, Err(worker_error));
-                    Self::send_worker_assistant_message(worker_assistant, message);
-                    return;
+                    return Self::send_worker_assistant_message(worker_assistant, message);
                 }
 
                 // Delegate computing-intensive task to a rayon's dedicated thread
