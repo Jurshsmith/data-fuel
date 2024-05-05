@@ -2,7 +2,6 @@ use std::ops::Range;
 
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tokio_util::task::TaskTracker;
 use tracing::info;
 
 use super::config::ServerAPIConfig;
@@ -15,7 +14,6 @@ pub struct WorkersPool<'a, S: ServerAPI + Send + Sync + 'static> {
     size: u32,
     master_messages: mpsc::Receiver<WorkerMessage>,
     workers: Option<Box<dyn Iterator<Item = Worker<S>> + 'a>>,
-    workers_tracker: TaskTracker,
     pub(crate) shutdown_workers: Vec<WorkerId>,
     cancel_tokens: Vec<CancellationToken>,
 }
@@ -59,7 +57,6 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
             master_messages,
             workers: Some(Box::new(workers)),
             cancel_tokens: Vec::new(),
-            workers_tracker: TaskTracker::new(),
             shutdown_workers: Vec::new(),
         }
     }
@@ -77,7 +74,7 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
                 if let Some(block_height_range) = block_height_ranges.take(1).next() {
                     let cancel_token = worker.cancel_token.clone();
 
-                    self.workers_tracker.spawn(worker.start(block_height_range));
+                    tokio::spawn(worker.start(block_height_range));
 
                     Some(cancel_token)
                 } else {
@@ -85,8 +82,6 @@ impl<'a, S: ServerAPI + Send + Sync + 'static> WorkersPool<'a, S> {
                 }
             })
             .collect();
-
-        self.workers_tracker.close();
     }
 
     pub fn has_started_shutdown(&self) -> bool {
