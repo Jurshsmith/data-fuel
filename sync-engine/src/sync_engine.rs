@@ -72,6 +72,8 @@ fn maybe_send_new_work(
 
 #[cfg(test)]
 mod tests {
+    use crate::results::WorkerError;
+
     use super::*;
 
     use tracing_test::traced_test;
@@ -152,11 +154,95 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    #[traced_test]
+    async fn handles_error_when_fetching_block_headers() {
+        let server_api = server_api_with_errors!(true);
+
+        let config = default_config(server_api)
+            .with_total_block_height_range(0..4)
+            .with_chunk_size(1);
+
+        let results = sync_blocks(&config).await;
+
+        assert_eq!(results.len(), 4);
+
+        for result in results.into_iter() {
+            assert!(result.is_err());
+            let error = result.unwrap_err();
+            assert!(match error {
+                WorkerError::BlockHeaders(_, ServerError) => true,
+                _ => false,
+            });
+        }
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    async fn handles_error_when_fetching_block_transactions() {
+        let server_api = server_api_with_errors!(false);
+
+        let config = default_config(server_api)
+            .with_total_block_height_range(0..4)
+            .with_chunk_size(1);
+
+        let results = sync_blocks(&config).await;
+
+        assert_eq!(results.len(), 4);
+
+        for result in results.into_iter() {
+            assert!(result.is_err());
+            let error = result.unwrap_err();
+            assert!(match error {
+                WorkerError::BlockTransactions(_, ServerError) => true,
+                _ => false,
+            });
+        }
+    }
+
     fn default_config<S: ServerAPI + Send + Sync + 'static>(server_api: S) -> Config<S> {
         Config::new(server_api)
             .with_total_block_height_range(0..10)
             .with_chunk_size(1)
     }
+}
+
+#[macro_export]
+macro_rules! server_api_with_errors {
+    ($block_headers_has_error:expr) => {{
+        use crate::{BlockHeader, ServerError, Transaction};
+
+        struct TestServerAPI {
+            block_headers_has_error: bool,
+        }
+
+        #[async_trait::async_trait]
+        impl ServerAPI for TestServerAPI {
+            async fn block_headers(
+                &self,
+                Range { start, .. }: Range<u32>,
+            ) -> Result<Vec<BlockHeader>, ServerError> {
+                if self.block_headers_has_error {
+                    Err(ServerError)
+                } else {
+                    Ok(vec![BlockHeader {
+                        block_height: start,
+                        ..Default::default()
+                    }])
+                }
+            }
+            async fn block_transactions(
+                &self,
+                _: Range<u32>,
+            ) -> Result<Vec<Vec<Transaction>>, ServerError> {
+                Err(ServerError)
+            }
+        }
+
+        TestServerAPI {
+            block_headers_has_error: $block_headers_has_error,
+        }
+    }};
 }
 
 #[macro_export]
