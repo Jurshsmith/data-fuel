@@ -50,8 +50,7 @@ pub async fn sync_blocks<S: ServerAPI + Send + Sync + 'static>(
             }
         };
 
-        let sync_is_completed = !unsynced_block_heights.has_next();
-        if sync_is_completed {
+        if !unsynced_block_heights.has_next() {
             workers_pool.start_shutdown();
         }
     }
