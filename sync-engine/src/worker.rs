@@ -71,25 +71,9 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
 
             loop {
                 let (worker, worker_messages) = oneshot::channel::<Range<u32>>();
-
-                let (worker_assistant, worker_assistant_message) =
-                    oneshot::channel::<WorkerMessage>();
-                let worker_assistant_tracker = TaskTracker::new();
-                worker_assistant_tracker.spawn({
-                    let master = master.clone();
-
-                    async move {
-                        let worker_message = worker_assistant_message
-                            .await
-                            .expect("Worker's assistant must receive A message for master");
-
-                        Self::send_master_message(&master, worker_message).await;
-                    }
-                });
-                worker_assistant_tracker.close();
+                let (result_agent, result_agent_tracker) = Self::start_result_agent(&master);
 
                 let Range { start, end } = block_height_range;
-
                 info!("Worker:{worker_id} working on BlockHeightRange:{start}..{end}");
 
                 let mut worker_error: Option<WorkerError> = None;
@@ -100,13 +84,13 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                         Ok(block_headers) => verify_block_headers(block_headers),
                         Err(err) => {
                             worker_error = Some(WorkerError::BlockHeaders(start..end, err));
-                            (HashMap::new(), HashMap::new())
+                            Default::default()
                         }
                     };
                 if let Some(worker_error) = worker_error {
                     let message =
                         WorkerMessage::FailedWork(worker_id, worker, start..end, Err(worker_error));
-                    return Self::send_worker_assistant_message(worker_assistant, message);
+                    return Self::send_result_to_master(result_agent, message);
                 }
 
                 block_transactions_rate_limiter.throttle().await;
@@ -114,13 +98,13 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                     Ok(transactions) => transactions,
                     Err(err) => {
                         worker_error = Some(WorkerError::BlockTransactions(start..end, err));
-                        Vec::new()
+                        Default::default()
                     }
                 };
                 if let Some(worker_error) = worker_error {
                     let message =
                         WorkerMessage::FailedWork(worker_id, worker, start..end, Err(worker_error));
-                    return Self::send_worker_assistant_message(worker_assistant, message);
+                    return Self::send_result_to_master(result_agent, message);
                 }
 
                 // Delegate computing-intensive task to a rayon's dedicated thread
@@ -134,12 +118,12 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                     .map(|block_txs| maybe_create_block(block_txs, &mut verified_block_headers))
                     .collect();
 
-                    let message = WorkerMessage::CompletedWork(
+                    let result_message = WorkerMessage::CompletedWork(
                         worker_id,
                         start..end,
                         results::to_worker_result(created_blocks_results, start..end),
                     );
-                    Self::send_worker_assistant_message(worker_assistant, message);
+                    Self::send_result_to_master(result_agent, result_message);
                 });
 
                 let message = WorkerMessage::AwaitingWork(worker_id, worker);
@@ -148,7 +132,7 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
                 tokio::select! {
                     _ = cancel_token.cancelled() => {
                         info!("Worker:{worker_id} shutdown started...");
-                        worker_assistant_tracker.wait().await;
+                        result_agent_tracker.wait().await;
                         let message = WorkerMessage::FinishedShuttingDown(worker_id);
                         Self::send_master_message(&master, message).await;
                         info!("Worker:{worker_id} finished shutting down");
@@ -162,20 +146,42 @@ impl<S: ServerAPI + Send + Sync + 'static> Worker<S> {
         }
     }
 
+    // Result agent stores the result from a worker to re-direct to the master on its behalf
+    fn start_result_agent(
+        master: &Master,
+    ) -> (tokio::sync::oneshot::Sender<WorkerMessage>, TaskTracker) {
+        let (result_agent, result_agent_message) = oneshot::channel::<WorkerMessage>();
+        let result_agent_tracker = TaskTracker::new();
+        result_agent_tracker.spawn({
+            let master = master.clone();
+
+            async move {
+                let worker_message = result_agent_message
+                    .await
+                    .expect("Worker's result agent must receive result for master");
+
+                Self::send_master_message(&master, worker_message).await;
+            }
+        });
+        result_agent_tracker.close();
+
+        (result_agent, result_agent_tracker)
+    }
+
+    fn send_result_to_master(
+        result_agent: oneshot::Sender<WorkerMessage>,
+        worker_message: WorkerMessage,
+    ) {
+        result_agent
+            .send(worker_message)
+            .expect("Worker's result agent must receive result to redirect to Master")
+    }
+
     async fn send_master_message(master: &Master, worker_message: WorkerMessage) {
         master
             .send(worker_message)
             .await
             .expect("Master must exist as long as I do")
-    }
-
-    fn send_worker_assistant_message(
-        assistant: oneshot::Sender<WorkerMessage>,
-        worker_message: WorkerMessage,
-    ) {
-        assistant
-            .send(worker_message)
-            .expect("Worker assistant must receive message to redirect to Master")
     }
 }
 
